@@ -1,4 +1,4 @@
-_v1.9 | updated by: profilo GENERICIZZATO per pubblicazione GitHub (dettagli personali/macchina → profile.local.md, NON versionato) | 2026-07-05_
+_v1.9_
 
 # Global Developer Profile
 
@@ -765,6 +765,9 @@ Increment N by 0.1 for minor changes, by 1.0 for rewrites.
 Applies to ALL managed .md files (CLAUDE, memory, rules, skills, errors,
 agents, decisions_log, handoff, README, global commands, plans/*).
 Exception: assets/ (visual/binary files) and .gitkeep — not versioned.
+Exception (public repo): the GLOBAL files shipped on GitHub (~/.claude/ CLAUDE.md, README.md,
+commands.md, workflow.md) keep a MINIMAL header — version only, `_vN_` — no "updated by"/date
+(they are published; the changelog lives in git). Do NOT re-add the long header to these 4 files.
 
 ## Dependencies between commands
 agents full          → each agent starts only if the previous one has no 🔴 (order in agents.md)

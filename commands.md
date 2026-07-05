@@ -1,4 +1,4 @@
-_v1.5 | updated by: +nota Centaur execution protocol (HYBRID) nella sezione AGENTS | 2026-07-05_
+_v1.5_
 
 # Commands — Complete Reference
 _All custom commands available in any project._

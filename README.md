@@ -1,65 +1,131 @@
-_v1.1 | aggiornato da: repo generico — families/ vuota (popolata da agents family init), rif. isaac_lab rimossi dal README | 2026-07-01_
+_v2.0_
 
-# Claude Code — Global Config
+# Claude Code — Global Workspace
 
-Portable global setup for **Claude Code**: session/memory management, custom commands, and a
-**3-level agent architecture**, reusable across projects and machines. This repo is the portable
-subset of `~/.claude/` — the reusable *system*, not per-project data.
+Portable global setup for **Claude Code**: session/memory management, custom commands, a
+**3-level agent architecture**, and an optional **local-LLM execution bridge (Ollama)**.
+This repo is the portable subset of `~/.claude/` — the reusable *system*, not per-project data
+and not personal data (see [Privacy](#-privacy--security)).
 
 ## What's inside
 | File / dir | Purpose |
 |---|---|
-| `CLAUDE.md` | Global rules + developer profile + all custom commands + agent system |
+| `CLAUDE.md` | Global rules, generic developer profile, all custom commands, the agent system, the Centaur (Ollama) execution protocol |
 | `commands.md` | Full command reference (used by `help`) |
 | `workflow.md` | Canonical work pipeline (project open → deliverable) |
-| `families/` | Home of **family** runtime-evaluation agents. **Ships empty** — you generate a family's agents on demand with `agents family init` (e.g. `ros2_nav/`, `isaac_lab/`, …) |
-| `settings.json` | Global Claude Code settings (model/theme) |
+| `families/` | Home of **family** runtime-evaluation agents. **Ships empty** — generated on demand with `agents family init` (e.g. `ros2_nav/`, `isaac_lab/`, …) |
+| `settings.json` | Global Claude Code settings (model preferences) |
 
 ### The 3 agent levels
-- **Generic (coding)** — Implementer → Reviewer → Validator. Trigger: `agents code [task]`. Defined in `CLAUDE.md`.
-- **Family (runtime evaluation)** — reusable across projects of the same family. Trigger: `agents monitor` / `agents eval` / `agents tune` / `agents family`. Generated on demand with `agents family init` into `families/<family>/agents.md` (not shipped — this repo is domain-neutral).
-- **Project (static audit)** — generated per project. Trigger: `agents full` / `agents [name]`. Lives in the project's own `.claude/agents.md`.
+| Level | What it does | Trigger | Where it lives |
+|---|---|---|---|
+| **Generic (coding)** | Implementer → Reviewer → Validator pipeline on any code task | `agents code [task]` | `CLAUDE.md` (shipped) |
+| **Family (runtime evaluation)** | Evaluates *runs/executions* (training logs, checkpoints, metrics) for a whole family of projects | `agents monitor` / `eval` / `tune` / `family` | `families/<family>/agents.md` (generated) |
+| **Project (static audit)** | 3 code auditors tailored to one project's risk areas | `agents full` / `agents [name]` | the project's own `.claude/agents.md` (generated) |
 
-## Install (new machine)
+---
+
+## 🛠 Install (new machine)
+
+**Prerequisites**: [Claude Code](https://claude.com/claude-code) installed. Git.
+
 ```bash
-# 1. Clone into the Claude config dir (or clone elsewhere and copy the files in)
-git clone <this-repo> ~/.claude
+# 1. Clone straight into the Claude config dir
+git clone https://github.com/rdedo99-byte/claude-workspace.git ~/.claude
 
 # 2. Authenticate (credentials are NOT in this repo — log in fresh)
-claude            # then follow the auth prompt
+claude            # follow the auth prompt
 
-# 3. Adjust machine-specific paths in CLAUDE.md
-#    (home dir, tool install paths, OS/GPU in the "Technical identity" section)
+# 3. Create your PERSONAL profile (local-only, never committed — the /* gitignore rule covers it)
+cat > ~/.claude/profile.local.md <<'EOF'
+# Personal profile — LOCAL-ONLY
+## Identity
+- <name, role, org>
+## Machine
+- <OS | GPU/RAM | key tool install paths>
+## Platforms / active projects
+- <robot platforms, project pointers>
+EOF
 ```
-> `~/.claude/` also holds machine/account state (`.credentials.json`, `projects/`, caches). Those are
-> **not** tracked here (see `.gitignore`) and are recreated locally on first use.
+`CLAUDE.md` instructs Claude to read `profile.local.md` at session start if present; without it,
+everything still works and specifics are learned per-project.
 
-## Bootstrap a project (build the architecture)
-Run these once per project, in order:
+> `~/.claude/` also holds machine/account state (`.credentials.json`, `projects/`, session caches).
+> None of it is tracked here (whitelist `.gitignore`) and it is recreated locally on first use.
+
+## 🚀 Usage
+
+**Bootstrap a project** (once per project, in order):
 ```
 1. init                → creates the project's .claude/ (CLAUDE.md, memory, handoff, errors, rules, skills)
-                          and detects the project family
-2. agents family init  → generates ~/.claude/families/<family>/agents.md  (skip if the family already exists)
+                          and detects the project FAMILY
+2. agents family init  → generates families/<family>/agents.md   (skip if the family already exists)
 3. agents init         → generates the project's .claude/agents.md (3 static-audit agents)
 ```
-On-demand files appear when needed: `log`/`adr` → `decisions_log.md`, `plan`/`design` → `plans/`.
 
-## Daily workflow
+**Daily loop**:
 ```
-resume                     # open a project (auto-loads handoff + memory + local CLAUDE.md)
-agents code [task]         # implement with the generic 3-agent cycle
+resume                     # open a project: auto-loads handoff + memory + local CLAUDE.md
+agents code [task]         # implement via the generic 3-agent cycle
 agents full                # static audit of the changed areas
-agents monitor/eval/tune   # (family) evaluate a run and prescribe fixes
-checkpoint | handoff       # save state mid-session / at the end
-help                       # list all commands (reads commands.md)
+agents monitor/eval/tune   # (family) supervise a run, measure the result, prescribe next changes
+plan / design [x]          # multi-session plans and pre-implementation designs (assets/)
+checkpoint | handoff       # save state mid-session / before closing the chat
+status | context | help    # dashboards and full command list (help reads commands.md)
 ```
-Full pipeline and command details: see `workflow.md` and `commands.md`.
+Session continuity: `handoff.md` + `memory.md` are updated automatically at context thresholds
+(60/80/95%) so a new chat resumes exactly where the old one stopped (`resume`).
+Full pipeline: `workflow.md`. Every command in detail: `commands.md`.
 
-## ⚠️ Security
-- **Never commit `~/.claude/.credentials.json`** or any auth token. The `.gitignore` whitelists only the
-  portable files — verify `git status` before every push.
-- Keep this repo **private**: `CLAUDE.md` contains a personal developer profile and absolute paths.
+## 🦙 Local LLM execution — Centaur (Ollama) — *optional*
+
+The system can offload the **mechanical** part of agent work (generate & run parsing scripts,
+apply syntactic edits, summarize verbose output) to a **local model via Ollama**, while the frontier
+model (Opus/Sonnet) keeps ALL judgment — diagnosis, severity, verdicts. Principle: **HYBRID —
+the local LLM executes, Claude judges.** The full protocol lives in `CLAUDE.md` → *"Centaur
+execution protocol"*; every agent (present or future-generated) carries an *Execution (Centaur)*
+stanza wired to it.
+
+**Setup** (on the machine that will run it):
+```bash
+# 1. Install Ollama and pull a worker model (MoE coder recommended: fast on modest hardware)
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen3-coder:30b        # ~18 GB; any capable local model works (configurable)
+
+# 2. Build the bridge: ask Claude Code to implement the "Centaur execution protocol"
+#    from CLAUDE.md → it creates ~/.claude/centaur/ (MCP server, venv, config.json).
+#    The bridge is machine-specific (paths, deny-lists) → intentionally NOT shipped in this repo.
+
+# 3. Register the MCP server globally (all projects):
+claude mcp add --scope user centaur \
+  -e PYTHONPATH=$HOME/.claude/centaur \
+  -- $HOME/.claude/centaur/.venv/bin/python -m centaur.server
+```
+
+**What you get** (4 generic, domain-agnostic MCP tools):
+- `vram_status` — resource gate: if a GPU training is alive, the local LLM is forced **CPU-only**
+  (it never steals VRAM from your run);
+- `qwen_codegen_run` — self-healing *generate → smoke-test → freeze → run*: once a script is frozen,
+  later calls run it **natively with no LLM** (instant, safe even during training);
+- `qwen_edit` — delta-only search&replace edits; protected files return a **diff for confirmation**,
+  never auto-applied;
+- `qwen_summarize` — mini-summaries of verbose output.
+
+**Graceful degradation**: without Ollama/the bridge, every agent simply does its mechanical step
+itself. Nothing breaks — Centaur is an optimization, not a dependency.
+
+**Practical notes** (from real use): generate/freeze scripts while the GPU is free (local LLM on GPU
+= fast); during a training use only the frozen scripts (LLM generation on CPU under load can exceed
+timeouts). Pick a model that fits your RAM/VRAM — an 18 GB MoE beats a 50 GB giant on a 16 GB GPU.
+
+## 🔒 Privacy & security
+- **Whitelist `.gitignore`**: everything in `~/.claude/` is ignored by default; only the files listed
+  above are tracked. Credentials, session data, memories and caches can never be committed by accident —
+  still, **check `git status --short` before every push**.
+- **Personal data lives in `profile.local.md`** (never tracked). `CLAUDE.md` here is generic on purpose:
+  no names, employers, hardware or absolute personal paths → the repo can stay public.
+- Never commit `.credentials.json` or any token (the whitelist already excludes them).
 
 ## Versioning
-Every managed `.md` file starts with a `_vN | updated by: … | date_` header. Bump `+0.1` for minor
-edits, `+1.0` for rewrites.
+Shipped files carry a minimal `_vN_` header (history = git). Project-side `.claude/` files use the
+richer `_vN | updated by | date_` convention described in `CLAUDE.md`.

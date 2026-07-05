@@ -1,4 +1,4 @@
-_v1.3 | updated by: family references genericized (per-family via agents family init) | 2026-07-01_
+_v1.3_
 
 # Generic workflow — work pipeline
 
