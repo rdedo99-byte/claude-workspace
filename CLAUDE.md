@@ -3,12 +3,11 @@ _v1.9_
 # Global Developer Profile
 
 ## Technical identity
-- Robotics developer: RL, autonomous navigation, embedded systems
-- Recurring project types: Isaac Lab (RL), ROS2/Nav2, CAN bus, STM32
 - Language: Italian for documentation, English for code and comments
-- **Personal/machine specifics** (identity, hardware, install paths, robot platforms):
+- **Personal profile — identity, machine, recurring stacks, robot platforms, active projects:**
   → `~/.claude/profile.local.md` — LOCAL-ONLY, never versioned. **Read it at session start
-  if it exists (Level 0)**; if absent (fresh clone), ask the user or learn per-project.
+  if it exists (Level 0)**; if absent (fresh clone), ask the user or learn per-project. Keep this
+  published file domain-neutral: no names, employers, hardware, specific stacks or project names.
 
 ## How I reason
 - I want to understand the why before the how — always give the rationale before
@@ -24,13 +23,8 @@ _v1.9_
 - Documentation: Italian | Code and variable names: English
 
 ## Recurring stacks
-| Domain               | Technologies                                    |
-|----------------------|-------------------------------------------------|
-| RL training          | Isaac Lab, RSL-RL, PPO, ONNX export             |
-| Navigation           | ROS2 Humble, Nav2, SLAM Toolbox, AMCL           |
-| Hardware interface   | CAN bus, CANopen, STM32, FreeRTOS               |
-| Robot platform       | → see profile.local.md (local-only)             |
-| Embedded             | No HAL at runtime, only peripheral registers    |
+→ Listed in `~/.claude/profile.local.md` (local-only). This published file stays domain-neutral;
+the assistant reads the user's actual stacks/platforms from the local profile at session start.
 
 ## Standard .claude/ structure
 Every project has this structure. Create it with "init", maintain it
@@ -94,7 +88,6 @@ Don't answer anything until you've read all three.
   machine MUST stay on AC. A suspend with a live CUDA process corrupts the driver context →
   the run hangs (Ctrl+C dead). Symptom: hang at a "random" iteration immune to SIGINT →
   first suspect GPU/driver (check `journalctl -k | grep -iE "suspend|PM:|Xid"`), not the code.
-  (agv_local_planner 2026-07-03: 5000-it run died at it501 this way.)
 
 ### Automatic memory.md update
 Update without waiting for me to ask:
@@ -134,7 +127,7 @@ Ask first before:
 - Anything that breaks compatibility with external systems
 
 Never do:
-- Modify third-party repos (IsaacLab/, official ROS2 packages)
+- Modify third-party / vendored repos (framework installs, official packages)
 - Assume the code works without having verified it
 - Duplicate information already present in the global into local files
 
@@ -549,7 +542,7 @@ MCP tools (generic, domain-agnostic — the bridge knows nothing about the calli
 - `vram_status()` — resource gate. When a training is alive (or VRAM > 85%) Qwen is forced CPU-only.
 - `qwen_codegen_run(spec, interpreter, freeze_path, test_args, run_args, …)` — self-healing
   generate→smoke-test→freeze→run; once frozen (spec-hash match) the script re-runs natively with NO
-  LLM. `interpreter` is a parameter (`python3`, `<isaaclab>/isaaclab.sh -p`, …).
+  LLM. `interpreter` is a parameter (`python3`, `./venv/bin/python`, a project's custom runner, …).
 - `qwen_edit(file, delta_spec, protected)` — Delta-Only Search&Replace; protected files → diff
   returned, NEVER auto-applied.
 - `qwen_summarize(text, instruction)` — mini-summary of verbose output.
@@ -563,7 +556,7 @@ so Qwen never holds VRAM; may hold RAM in CPU mode); B stateless one-shot; C sel
 **Agent stanza template** — every agent (present or fabricated later) carries ONE such line; only
 this line varies per agent, the Data/Checklist/Verdict sections stay unchanged and in Opus:
 > **Execution (Centaur):** <mechanical step> → dispatch to Qwen via `<tool>` with a spec carrying
-> <what to compute/produce>; interpreter=`<python3 | isaaclab.sh -p | …>`; freeze reusable scripts to
+> <what to compute/produce>; interpreter=`<python3 | ./venv/bin/python | custom runner | …>`; freeze reusable scripts to
 > `<path>`; needs_gpu=<yes/no> (if yes → gate on `vram_status`, i.e. not during training). The
 > VERDICT stays in Opus. Degrade gracefully if the `centaur` MCP is absent (Opus does the step itself).
 
@@ -668,17 +661,17 @@ as "agents init" does for the project-specific agents. When I write "agents fami
 2. If `~/.claude/families/[family]/agents.md` **already exists** → notify me and propose "agents family
    update" instead (don't overwrite for nothing).
 3. Identify the **lifecycle evaluation phases** typical of that family
-   (for RL: during-training, after-training, next-run-prescription). One agent per phase.
+   (generic pattern: during-run supervision, after-run evaluation, next-run prescription). One agent per phase.
 4. For each agent generate, in a **project-agnostic** way (it auto-configures by reading the local
    CLAUDE.md of the project it runs in, does NOT hardcode path/task):
-   - Descriptive domain name (e.g. `training-monitor`, `policy-evaluator`, `policy-tuner`).
+   - Descriptive domain name (e.g. `<run>-monitor`, `<artifact>-evaluator`, `<artifact>-tuner`).
    - "Auto-configuration" block: what to read from the project to parameterize itself.
-   - Which **runtime data** it reads (tfevents/checkpoint/play.py output/log), NOT the sources.
+   - Which **runtime data** it reads (telemetry/logs/artifact/build output), NOT the sources.
    - Computed 8-15 point checklist (metrics, not "eyeball it").
    - 🔴/🟡/🟢 criteria and Output format with verdict.
    - **Execution (Centaur) stanza** (per the global template): the mechanical read/run step →
      dispatch to Qwen via `qwen_codegen_run`; interpreter, freeze path, needs_gpu (set YES for any
-     agent that launches the sim/GPU → it must gate on `vram_status`, i.e. not during training). The
+     agent that launches a GPU/heavy job → it must gate on `vram_status`, i.e. not while a run is live). The
      checklist and verdict stay in Opus.
 5. Create `~/.claude/families/[family]/agents.md` with a versioning header and an index table.
 6. Register the triggers above (this "Registered commands" section) and in `~/.claude/commands.md`.
@@ -690,7 +683,7 @@ as "agents init" does for the project-specific agents. When I write "agents fami
 
 Generation rules (analogous to "agents init" but for the RUNTIME, not for the code):
 - Family agents EVALUATE the execution, they don't do static audit of the sources (those are the P's).
-- Project-agnostic ALWAYS: no hardcoded path/task/num_envs → derived from the project at runtime.
+- Project-agnostic ALWAYS: no hardcoded path/task/run-params → derived from the project at runtime.
 - They cover DIFFERENT and ordered lifecycle phases (diagnosis → prescription), they don't overlap.
 - Reusable on EVERY project of the same family (present and future).
 - Every generated agent carries an Execution (Centaur) stanza (mechanical work → Qwen via the

@@ -185,7 +185,7 @@ Output: N checks added / removed
 ### agents full
 Runs all 3 project-specific agents in sequence.
 The second only starts if the first has no 🔴 blockers.
-When: start of a training session | after big changes
+When: before a big run/build | after big changes
 Dependencies: agents init must have been run
 Output: complete report + updated memory.md
 
@@ -290,10 +290,10 @@ Output: "✅ commands.md realigned — [N] added, [N] removed"
 | agents update | P agents maintenance | agents.md |
 | agents full | complete P validation | memory+errors+skills |
 | agents [name] | single P validation | memory |
-| agents monitor | monitor training (F) | reads tfevents |
-| agents eval | evaluate policy (F) | runs play.py |
-| agents tune | next run prescription (F) | edits under supervision |
-| agents family | monitor+eval+tune (F) | reads tfevents+play.py |
+| agents monitor | supervise a run (F) | reads run telemetry |
+| agents eval | evaluate the output (F) | runs the built artifact |
+| agents tune | next-run prescription (F) | edits under supervision |
+| agents family | monitor+eval+tune (F) | telemetry + artifact |
 | agents family init | create family agents | families/[fam]/agents.md |
 | agents family update | F agents maintenance | families/[fam]/agents.md |
 | help | command list | reads commands.md |

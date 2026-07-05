@@ -1,16 +1,21 @@
-_v1.3_
+_v2.0_
 
 # Generic workflow — work pipeline
 
 Canonical order of commands and agents, from "I open the project" to "deliverable shipped".
-Generic: applies to every project with `.claude/`. The runtime-evaluation phases use the
+**Domain-neutral**: applies to any project with `.claude/`. The runtime-evaluation phases use the
 FAMILY agents (`~/.claude/families/<family>/agents.md`, generated per project with
-`agents family init`); the code phases use the global generics and the project-specific ones.
-A project can have a LOCAL `workflow.md` that overrides/extends this one (see bottom). The
-phases below use an RL/training run as the worked example; adapt the run/build steps to your domain.
+`agents family init`) — those carry the domain-specific checklists (they are NOT in this repo).
+Any project can add a LOCAL `.claude/workflow.md` that overrides/extends this one with its exact
+commands (see bottom).
+
+Terminology used below (map it to your domain):
+- **run** = any long-running produced process: a build, a training, a batch/data job, a deploy.
+- **artifact** = what the run produces: a binary, a trained model, a dataset, a report.
+- **telemetry** = whatever the run emits while running: logs, metrics, progress counters.
 
 Agent-level legend:
-- **G** = global generics (coding): Code Implementer · Code Reviewer · Integration Validator → `agents code [task]`
+- **G** = global generics (coding): Implementer · Reviewer · Integration Validator → `agents code [task]`
 - **F** = family (runtime evaluation): the family's monitor/eval/tune agents → `agents monitor` · `agents eval` · `agents tune` · `agents family`
 - **P** = project-specific (static audit): in `.claude/agents.md` → `agents [name]` · `agents full`
 
@@ -19,7 +24,7 @@ Agent-level legend:
 ## PHASE 0 — Opening the project (automatic)
 1. `resume` (or automatic) → Level 0: reads `handoff.md` + `memory.md` + local `CLAUDE.md`.
 2. Responds with status, next step, open issues.
-3. (opt.) `status` → quick dashboard · `context` → what I know now · `onboard` → if you return from a long break.
+3. (opt.) `status` → quick dashboard · `context` → what I know now · `onboard` → returning after a long break.
 → Do NOT load other files until you know what to do (lazy loading Level 1/2).
 
 ## PHASE 1 — Deciding what to do
@@ -31,64 +36,65 @@ Agent-level legend:
 ## PHASE 2 — Implementing the code
 1. `agents code [task]` → **G**: Implementer writes → Reviewer classifies 🔴/🟡/🟢 →
    if 🔴 back to Implementer (max 3 iter) → Integration Validator → updates `memory.md`.
-2. After changes to domain files → targeted **P** agents:
-   - you touch scene/asset/reset → `agents [project's scene-auditor]`
-   - you touch reward/obs/control → `agents [project's reward-auditor]`
-   - you touch PPO cfg/obs space/export → `agents [project's onnx/integration-auditor]`
-   - or all of them → `agents full`.
+2. After changes to sensitive areas → the matching **P** agent (the ones `agents init` created for
+   THIS project's risk areas), or all of them → `agents full`.
 3. Architectural decision taken → goes into `memory.md` (🗂) and into `decisions_log.md` (`adr`/`log`).
 4. New bug → `errors.md` right away; important bug fixed → `postmortem`.
 
-## PHASE 3 — Writing the training configs (RL)
-1. You modify `*_env_cfg.py` / `agents/*_ppo_cfg.py` → they are PROTECTED: **ask for confirmation** (they impact obs/action space).
-2. After modifying the cfg → integration **P** agent (`agents full` or the onnx-auditor):
-   verifies obs_space env↔cfg aligned, correct CNN flatten, share_cnn_encoders, etc.
-3. Scene sanity before launching: visual check with a few GUI envs (command in local `CLAUDE.md`, e.g. `random_agent.py --num_envs=4`).
-4. Decide a safe `num_envs` (see `errors.md`/`CLAUDE.md` for the project's OOM limits).
+## PHASE 3 — Config / protected files
+1. Editing files that impact a public contract (interfaces, config that changes I/O shape, registered
+   names) → they are **PROTECTED**: **ask for confirmation** before writing, show the diff.
+2. After a protected edit → the integration **P** agent verifies the change is internally consistent
+   (interfaces aligned, no unintended shape/contract change).
+3. Sanity check before launching a run (a quick smoke / dry-run — exact command in the local `CLAUDE.md`).
+4. Note any resource limits the project documents (e.g. memory/OOM ceilings) before a heavy run.
 
-## PHASE 4 — Launching the training
-1. Launch in background (project script, e.g. `train.sh --num_envs=N`).
-2. Note the run timestamp in `memory.md` (🔄 In progress).
+## PHASE 4 — Launching the run
+1. Launch it (the project's run command). Long unattended GPU/compute runs: block auto-suspend, stay on power.
+2. Note the run identifier/timestamp in `memory.md` (🔄 In progress).
+   *(House rule option: some projects forbid the assistant from launching runs itself — it provides the
+   command and the user launches it. Encode that in the local rules if wanted.)*
 
-## PHASE 5 — Supervising the training (DURING) — **F** agent
-- `agents monitor` → `training-monitor`: reads the tfevents of the active run, computes
-  reward trend / plateau / action_std collapse / LR floor / value loss / ETA.
-- VERDICT: ✅ continue · ⚠️ plateau, evaluate at end of run · ❌ stop and fix (with action: e.g. ↑entropy_coef).
-- If ❌ → back to PHASE 3 (reshape reward / hyperparameters), relaunch.
-- Repeat `agents monitor` at intervals or at end of run.
+## PHASE 5 — Supervising the run (DURING) — **F** agent
+- `agents monitor` → the family's monitor: reads the run's telemetry, computes the family's health
+  signals (progress trend / plateau / instability / divergence / ETA). It reads telemetry only — safe
+  to run while the run is live.
+- VERDICT: ✅ continue · ⚠️ plateau, evaluate at the end · ❌ stop and fix (+ concrete action).
+- If ❌ → back to PHASE 3 (adjust config/params), relaunch. Repeat `agents monitor` at intervals.
 
-## PHASE 6 — Evaluating and correcting the policy (AFTER) — **F** agent
-1. `agents eval` → `policy-evaluator`: runs play.py, measures success_rate / collision_rate /
-   timeout / time-to-goal / smoothness over many episodes.
-   - VERDICT: ✅ ready for export · ⚠️ usable but [limit] · ❌ not ready.
-2. If ⚠️/❌ → `agents tune` → `policy-tuner`: takes the diagnosis from monitor+eval and produces the
-   PRESCRIPTION — precise edits (file, param, current→proposed, rationale, risk), ordered by
-   priority, + recommended run (from scratch / resume). It can APPLY the edits under supervision:
-   shows the diff and asks for confirmation on PROTECTED files before writing.
-3. Once the edits are applied (after ok) → new run (PHASE 4). For non-config refactoring → `agents code`.
-4. If ✅ → jump to PHASE 7 (export).
-- (`agents family` = monitor → eval → tune in sequence: eval only if the run is finished,
-  tune only if there are problems to correct.)
+## PHASE 6 — Evaluating & correcting the output (AFTER) — **F** agent
+1. `agents eval` → the family's evaluator: exercises the produced artifact and measures the family's
+   target quality metrics over a representative sample.
+   - VERDICT: ✅ ready for the next step · ⚠️ usable but [limit] · ❌ not ready.
+   - Do NOT run a heavy eval while a run is competing for the same resources.
+2. If ⚠️/❌ → `agents tune` → the family's tuner: turns the monitor+eval diagnosis into a PRESCRIPTION —
+   precise edits (file, param, current→proposed, rationale, risk), ordered by priority, + recommended
+   next run. It can APPLY the edits under supervision: shows the diff, asks confirmation on PROTECTED files.
+3. Once applied (after ok) → new run (PHASE 4). For non-config refactoring → `agents code`.
+4. If ✅ → PHASE 7.
+- (`agents family` = monitor → eval → tune in sequence: eval only if the run is finished, tune only if
+  there are problems to correct.)
 
-## PHASE 7 — Export and integration
-1. Pre-export → integration **P** agent (onnx-auditor): dual-input ONNX, no double
-   normalization, grid format sim↔real, compatible checkpoint.
-2. Export (play.py → `exported/policy.onnx`).
-3. External consumer (e.g. Nav2/ROS2 plugin) = separate project, outside this repo.
+## PHASE 7 — Ship / export / integrate
+1. Pre-ship → the integration **P** agent: verifies the artifact meets its external contract
+   (interface, format, no double-processing, downstream compatibility).
+2. Produce the deliverable.
+3. External consumers are separate projects, outside this repo.
 
 ## PHASE 8 — Closing the session
 - Mid-session → `checkpoint` (only `memory.md`).
 - End / chat switch → `handoff` (rewrites `handoff.md` + `memory.md`).
 - Context emergency (~95%) → `dump` in `assets/`.
-- Maintenance: `update` (aligns `.claude/` to the code) · `review` (consistency) · `clean` (old assets) · `agents update` (aligns the P agents to the code).
+- Maintenance: `update` (aligns `.claude/` to the code) · `review` (consistency) · `clean` (old assets) · `agents update`.
 
 ---
 
 ## Context window management (during ALL phases)
 40% work · 60% checkpoint + ask before loading files · 80% automatic handoff · 95% dump.
-(Single source of truth: section "Trigger automatico handoff" in `~/.claude/CLAUDE.md`.)
+(Single source of truth: the auto-handoff section in `~/.claude/CLAUDE.md`.)
 
 ## LOCAL workflow (per-project override)
-If a project has `.claude/workflow.md`, that takes precedence: it contains the EXACT commands
-(real paths, task name, safe num_envs, checkpoint, the project's P agent names) and the
-deviations from this generic flow. This global file remains the fallback.
+If a project has `.claude/workflow.md`, that takes precedence: it holds the EXACT commands (real
+paths, run/build command, resource limits, checkpoint/artifact names, the project's P agent names)
+and any deviation from this generic flow. **All domain-specific detail lives there and in the family
+agents (`families/<family>/agents.md`) — never in this published, domain-neutral file.**
