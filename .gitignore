@@ -1,0 +1,19 @@
+# Claude global config — commit ONLY the portable, domain-neutral system.
+# Everything else (credentials, project data, caches) stays local.
+
+# 1) ignore everything at root by default
+/*
+
+# 2) whitelist the portable system files
+!/CLAUDE.md
+!/commands.md
+!/workflow.md
+!/settings.json
+!/README.md
+!/.gitignore
+
+# 3) families/ is tracked but SHIPS EMPTY:
+#    generate per-family agents locally with `agents family init`.
+!/families/
+/families/*
+!/families/.gitkeep
