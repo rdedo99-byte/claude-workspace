@@ -17,3 +17,16 @@
 !/families/
 /families/*
 !/families/.gitkeep
+
+# 4) centaur/ (Ollama execution bridge): ship the CODE + template, NOT machine state.
+#    Shipped: the python package, requirements, config.example.json, README.
+#    NOT shipped: .venv/ (recreate via pip), frozen/ (throwaway), specs/ (project-specific),
+#                 and the REAL config.json (holds your local paths → stays local).
+!/centaur/
+/centaur/*
+!/centaur/README.md
+!/centaur/requirements.txt
+!/centaur/config.example.json
+!/centaur/centaur/
+/centaur/centaur/*
+!/centaur/centaur/*.py

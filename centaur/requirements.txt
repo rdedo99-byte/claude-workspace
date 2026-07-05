@@ -1,0 +1,5 @@
+# Centaur bridge — Python deps (install into an isolated venv)
+#   python3 -m venv ~/.claude/centaur/.venv
+#   ~/.claude/centaur/.venv/bin/pip install -r requirements.txt
+mcp>=1.28,<2
+httpx

@@ -86,21 +86,28 @@ the local LLM executes, Claude judges.** The full protocol lives in `CLAUDE.md` 
 execution protocol"*; every agent (present or future-generated) carries an *Execution (Centaur)*
 stanza wired to it.
 
+The bridge code ships in `centaur/` (generic; your real paths live in a git-ignored `config.json`).
+
 **Setup** (on the machine that will run it):
 ```bash
-# 1. Install Ollama and pull a worker model (MoE coder recommended: fast on modest hardware)
+# 1. Ollama + a worker model (MoE coder recommended: fast executor, fits modest GPUs)
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3-coder:30b        # ~18 GB; any capable local model works (configurable)
 
-# 2. Build the bridge: ask Claude Code to implement the "Centaur execution protocol"
-#    from CLAUDE.md → it creates ~/.claude/centaur/ (MCP server, venv, config.json).
-#    The bridge is machine-specific (paths, deny-lists) → intentionally NOT shipped in this repo.
+# 2. Isolated venv + deps for the bridge
+python3 -m venv ~/.claude/centaur/.venv
+~/.claude/centaur/.venv/bin/pip install -r ~/.claude/centaur/requirements.txt
 
-# 3. Register the MCP server globally (all projects):
+# 3. Your local config (kept out of git — this is where your machine paths go)
+cp ~/.claude/centaur/config.example.json ~/.claude/centaur/config.json
+#    edit config.json: model, and your project's custom interpreter/run-matcher if any
+
+# 4. Register the MCP server globally (all projects)
 claude mcp add --scope user centaur \
   -e PYTHONPATH=$HOME/.claude/centaur \
   -- $HOME/.claude/centaur/.venv/bin/python -m centaur.server
 ```
+Full bridge details: `centaur/README.md`.
 
 **What you get** (4 generic, domain-agnostic MCP tools):
 - `vram_status` — resource gate: if a GPU training is alive, the local LLM is forced **CPU-only**
